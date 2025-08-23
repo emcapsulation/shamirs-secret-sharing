@@ -15,7 +15,7 @@ This is my implementation of Shamir's Secret Sharing that I did for personal lea
 
 ## Running the Code
 ```
-g++ util.cpp SecretSharing.cpp shamirs-secret-sharing.cpp -Wall -Werror -fsanitize=address -o shamirs-secret-sharing
+g++ ShamirsSecretSharing.cpp sss-main.cpp -Wall -Werror -fsanitize=address -o shamirs-secret-sharing
 ```
 ```
 ./shamirs-secret-sharing
