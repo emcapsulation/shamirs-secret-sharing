@@ -14,6 +14,16 @@ ShamirsSecretSharing::ShamirsSecretSharing(
 	unsigned long long k
 ) : secret(secret), k(k), rng(std::random_device{}()) {
 
+	if (secret >= p) {
+		throw std::domain_error("Error: The secret is larger than the field size.");
+	}
+
+	if (k >= p) {
+		throw std::domain_error("Error: The threshold (k) is larger than the field size.");
+	} else if (k <= 1) {
+		throw std::domain_error("Error: The threshold (k) must be at least 2.");
+	}
+
 	// n starts at 0 because the user will ask to generate shares later.
 	this->n = 0;
 
@@ -47,6 +57,9 @@ std::vector<std::pair<unsigned long long, unsigned long long>> ShamirsSecretShar
 std::vector<std::pair<unsigned long long, unsigned long long>> ShamirsSecretSharing::generateShares(
 	unsigned long long n
 ) {
+	if (this->n + n >= p) {
+		throw std::domain_error("Error: The number of shares requested is outside the field size.");
+	}
 
 	for (unsigned long long i = 0; i < n; i++) {
 		unsigned long long x = this->n + i+1;
@@ -81,6 +94,10 @@ unsigned long long ShamirsSecretSharing::recoverSecret(
 	unsigned long long secret = 0;
 
 	for (unsigned long long i = 0; i < userShares.size(); i++) {
+		if (userShares[i].first >= p || userShares[i].second >= p) {
+			throw std::domain_error("Error: A provided share is outside the field range.");
+		}
+
 		// Numerator = (x-x_{1})...(x-x_{i-1})(x-x_{i+1})...(x-x_{k})
 		unsigned long long numerator = 1;
 
@@ -99,6 +116,11 @@ unsigned long long ShamirsSecretSharing::recoverSecret(
 			}
 		}
 
+		// This can only happen if two shares have the same x-value
+		if (denominator == 0) {
+			throw std::invalid_argument("Error: Two or more of the provided shares had the same x-value.");
+		}
+
 		// To compute a/b (mod p), we must calculate a*b^{-1} (mod p)
 		unsigned long long fraction = modMultiply(
 			numerator, 
@@ -112,7 +134,7 @@ unsigned long long ShamirsSecretSharing::recoverSecret(
 		secret = mod(secret + thisTerm);
 	}
 
-	return static_cast<unsigned long long>(secret);
+	return secret;
 }
 
 
@@ -156,7 +178,7 @@ unsigned long long ShamirsSecretSharing::evaluatePolynomial(
 		yValue = mod(yValue+curTerm);
 	}
 
-	return static_cast<unsigned long long>(yValue);
+	return yValue;
 }
 
 
@@ -189,6 +211,10 @@ unsigned long long ShamirsSecretSharing::getRandomIntegerInRange(
 unsigned long long ShamirsSecretSharing::getMultiplicativeInverse(
 	unsigned long long a
 ) {
+	if (a == 0) {
+		throw std::invalid_argument("Error: 0 has no multiplicative inverse.");
+	}
+
 	return modPower(a, p-2);
 }
 
@@ -216,7 +242,7 @@ unsigned long long ShamirsSecretSharing::modPower(
 		b = modMultiply(b, b);
 	}
 
-	return static_cast<unsigned long long>(res);
+	return res;
 }
 
 
