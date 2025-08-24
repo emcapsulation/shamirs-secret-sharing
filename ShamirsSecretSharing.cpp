@@ -78,14 +78,14 @@ std::vector<std::pair<unsigned long long, unsigned long long>> ShamirsSecretShar
 unsigned long long ShamirsSecretSharing::recoverSecret(
 	const std::vector<std::pair<unsigned long long, unsigned long long>> &userShares
 ) {
-	__uint128_t secret = 0;
+	unsigned long long secret = 0;
 
 	for (unsigned long long i = 0; i < userShares.size(); i++) {
 		// Numerator = (x-x_{1})...(x-x_{i-1})(x-x_{i+1})...(x-x_{k})
-		__uint128_t numerator = 1;
+		unsigned long long numerator = 1;
 
 		// Denominator = (x_{i}-x_{1})...(x_{i}-x_{i-1})(x_{i}-x_{i+1})...(x_{i}-x_{k})
-		__uint128_t denominator = 1;
+		unsigned long long denominator = 1;
 
 		for (unsigned long long j = 0; j < userShares.size(); j++) {
 			if (j != i) {
@@ -100,13 +100,13 @@ unsigned long long ShamirsSecretSharing::recoverSecret(
 		}
 
 		// To compute a/b (mod p), we must calculate a*b^{-1} (mod p)
-		__uint128_t fraction = modMultiply(
+		unsigned long long fraction = modMultiply(
 			numerator, 
 			getMultiplicativeInverse(denominator)
 		);
 
 		// Multiply the term's fraction by the y-value of the current share, i
-		__uint128_t thisTerm = modMultiply(fraction, userShares[i].second);
+		unsigned long long thisTerm = modMultiply(fraction, userShares[i].second);
 
 		// Add this term to the secret
 		secret = mod(secret + thisTerm);
@@ -144,15 +144,15 @@ unsigned long long ShamirsSecretSharing::evaluatePolynomial(
 	unsigned long long x
 ) const {
 	// The secret is the constant term of the polynomial
-	__uint128_t yValue = secret;
+	unsigned long long yValue = secret;
 
-	__uint128_t curX = 1;
+	unsigned long long curX = 1;
 	for (unsigned long long i = 0; i < coefficients.size(); i++) {
 		// Increase the x exponent by 1
 		curX = modMultiply(curX, x);
 
 		// Multiply by this coefficient
-		__uint128_t curTerm = modMultiply(coefficients[i], curX);
+		unsigned long long curTerm = modMultiply(coefficients[i], curX);
 		yValue = mod(yValue+curTerm);
 	}
 
@@ -207,13 +207,13 @@ unsigned long long ShamirsSecretSharing::modPower(
 	unsigned long long base,
 	unsigned long long exp
 ) {
-	__uint128_t res = 1, b = base;
+	unsigned long long res = 1, b = base;
 
 	for (; exp > 0; exp >>= 1) {
 		if (exp & 1) {
-			res = mod(res * b);
+			res = modMultiply(res, b);
 		}
-		b = mod(b * b);
+		b = modMultiply(b, b);
 	}
 
 	return static_cast<unsigned long long>(res);
