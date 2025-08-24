@@ -13,15 +13,13 @@
  * @return The user's ULL input.
  */
 unsigned long long readUInt64(const std::string &prompt) {
+	long long signedInput;
 	unsigned long long input;
 
 	bool valid = false;
 	while (!valid) {
-		if (prompt != "") {
-			std::cout << prompt;
-		}
-		
-		std::cin >> input;
+		std::cout << prompt;		
+		std::cin >> signedInput;
 
 		if (std::cin.fail()) {
 			std::cout << "Invalid input.\n";
@@ -30,7 +28,11 @@ unsigned long long readUInt64(const std::string &prompt) {
 			std::cin.clear();
 			std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
+		} else if (signedInput < 0) {
+			std::cout << "Input cannot be negative.\n";
+
 		} else {
+			input = static_cast<unsigned long long>(signedInput);
 			valid = true;
 		}
 	}
@@ -48,33 +50,18 @@ unsigned long long readUInt64(const std::string &prompt) {
  * 
  * @return The ShamirsSecretSharing instance.
  */
-ShamirsSecretSharing hideSecret() {	
-	std::cout << "\nSHAMIR'S SECRET SHARING\n";
-	unsigned long long secret = readUInt64("Enter the secret (S): ");
-	unsigned long long k = readUInt64("Enter the number of shares which need to be combined to recover the secret (k): ");
+ShamirsSecretSharing hideSecret() {
+	while (true) {
+		std::cout << "\nSHAMIR'S SECRET SHARING\n";
+		unsigned long long secret = readUInt64("Enter the secret (S): ");
+		unsigned long long k = readUInt64("Enter the number of shares which need to be combined to recover the secret (k): ");
 
-	ShamirsSecretSharing sssInstance(secret, k);
-	return sssInstance;
-}
-
-
-/**
- * Prompts the user for a number of shares to be generated, and then outputs 
- * the full list of shares.
- * 
- * @param sssInstance The ShamirsSecretSharing instance to generate the shares.
- * 
- * @return Void
- */
-void generateShares(ShamirsSecretSharing &sssInstance) {
-	std::cout << "\nCREATE SHARES\n";
-	unsigned long long n = readUInt64("Enter the number of shares to generate (n): ");
-
-	std::vector<std::pair<unsigned long long, unsigned long long>> shares = sssInstance.generateShares(n);
-
-	std::cout << "\nALL SHARES\n";
-	for (unsigned long long i = 0; i < shares.size(); i++) {
-		std::cout << shares[i].first << ' ' << shares[i].second << '\n';
+		try {
+			ShamirsSecretSharing sssInstance(secret, k);
+			return sssInstance;
+		} catch (const std::domain_error &e) {
+			std::cerr << e.what() << std::endl;
+		}
 	}
 }
 
@@ -93,6 +80,30 @@ void viewShares(ShamirsSecretSharing &sssInstance) {
 	for (unsigned long long i = 0; i < shares.size(); i++) {
 		std::cout << shares[i].first << ' ' << shares[i].second << '\n';
 	}
+}
+
+
+/**
+ * Prompts the user for a number of shares to be generated, and then outputs 
+ * the full list of shares.
+ * 
+ * @param sssInstance The ShamirsSecretSharing instance to generate the shares.
+ * 
+ * @return Void
+ */
+void generateShares(ShamirsSecretSharing &sssInstance) {
+	std::cout << "\nCREATE SHARES\n";
+	unsigned long long n = readUInt64("Enter the number of shares to generate (n): ");
+
+	std::vector<std::pair<unsigned long long, unsigned long long>> shares;
+	try {
+		shares = sssInstance.generateShares(n);
+	} catch (const std::domain_error &e) {
+		std::cerr << e.what() << std::endl;
+		return;
+	}	
+
+	viewShares(sssInstance);
 }
 
 
@@ -116,7 +127,17 @@ void recoverSecret(unsigned long long k) {
 		shares[i-1] = {x, y};
 	}
 
-	unsigned long long secret = ShamirsSecretSharing::recoverSecret(shares);
+	unsigned long long secret;
+	try {
+		secret = ShamirsSecretSharing::recoverSecret(shares);
+	} catch (const std::domain_error &e) {
+		std::cerr << e.what() << std::endl;
+		return;
+	} catch (const std::invalid_argument &e) {
+		std::cerr << e.what() << std::endl;
+		return;
+	}
+
 	std::cout << "Secret: " << secret << '\n';
 }
 
