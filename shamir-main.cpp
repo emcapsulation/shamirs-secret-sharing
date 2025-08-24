@@ -87,8 +87,6 @@ void generateShares(ShamirsSecretSharing &sssInstance) {
  * @return Void
  */
 void viewShares(ShamirsSecretSharing &sssInstance) {
-	std::cout << "\nVIEW SHARES\n";
-
 	std::vector<std::pair<unsigned long long, unsigned long long>> shares = sssInstance.getShares();
 
 	std::cout << "\nALL SHARES\n";
