@@ -30,6 +30,10 @@ unsigned long long ShamirsSecretSharing::getK() const {
 	return this->k;
 }
 
+std::vector<std::pair<unsigned long long, unsigned long long>> ShamirsSecretSharing::getShares() const {
+	return this->shares;
+}
+
 
 /**
  * Generates n additional shares by selecting points which lie on the polynomial.
@@ -86,23 +90,23 @@ unsigned long long ShamirsSecretSharing::recoverSecret(
 		for (unsigned long long j = 0; j < userShares.size(); j++) {
 			if (j != i) {
 				// (x-x_{j}), but x=0 in this case since we want the constant term
-				unsigned long long factor = moduloSubtract(0, userShares[j].first);
-				numerator = moduloMultiply(numerator, factor);
+				unsigned long long factor = modSubtract(0, userShares[j].first);
+				numerator = modMultiply(numerator, factor);
 
 				// (x_{i}-x_{j})
-				unsigned long long divisor = moduloSubtract(userShares[i].first, userShares[j].first);
-				denominator = moduloMultiply(denominator, divisor);
+				unsigned long long divisor = modSubtract(userShares[i].first, userShares[j].first);
+				denominator = modMultiply(denominator, divisor);
 			}
 		}
 
 		// To compute a/b (mod p), we must calculate a*b^{-1} (mod p)
-		__uint128_t fraction = moduloMultiply(
+		__uint128_t fraction = modMultiply(
 			numerator, 
 			getMultiplicativeInverse(denominator)
 		);
 
 		// Multiply the term's fraction by the y-value of the current share, i
-		__uint128_t thisTerm = moduloMultiply(fraction, userShares[i].second);
+		__uint128_t thisTerm = modMultiply(fraction, userShares[i].second);
 
 		// Add this term to the secret
 		secret = mod(secret + thisTerm);
@@ -145,10 +149,10 @@ unsigned long long ShamirsSecretSharing::evaluatePolynomial(
 	__uint128_t curX = 1;
 	for (unsigned long long i = 0; i < coefficients.size(); i++) {
 		// Increase the x exponent by 1
-		curX = moduloMultiply(curX, x);
+		curX = modMultiply(curX, x);
 
 		// Multiply by this coefficient
-		__uint128_t curTerm = moduloMultiply(coefficients[i], curX);
+		__uint128_t curTerm = modMultiply(coefficients[i], curX);
 		yValue = mod(yValue+curTerm);
 	}
 
@@ -185,7 +189,7 @@ unsigned long long ShamirsSecretSharing::getRandomIntegerInRange(
 unsigned long long ShamirsSecretSharing::getMultiplicativeInverse(
 	unsigned long long a
 ) {
-	return moduloPower(a, p-2);
+	return modPower(a, p-2);
 }
 
 
@@ -199,7 +203,7 @@ unsigned long long ShamirsSecretSharing::getMultiplicativeInverse(
  * 
  * @return base^exp (mod p)
  */
-unsigned long long ShamirsSecretSharing::moduloPower(
+unsigned long long ShamirsSecretSharing::modPower(
 	unsigned long long base,
 	unsigned long long exp
 ) {
@@ -217,16 +221,14 @@ unsigned long long ShamirsSecretSharing::moduloPower(
 
 
 /**
- * Computes a-b (mod p).
- *  If a-b is positive, just complete the subtraction.
- *  If a-b is negative, (a-b) = p - (b-a) (mod p)
+ * Computes a-b (mod p). The +p is required in case a-b is negative.
  * 
  * @param a
  * @param b
  * 
  * @return a-b (mod p)
  */
-inline unsigned long long ShamirsSecretSharing::moduloSubtract(
+inline unsigned long long ShamirsSecretSharing::modSubtract(
 	unsigned long long a,
 	unsigned long long b
 ) {
@@ -242,7 +244,7 @@ inline unsigned long long ShamirsSecretSharing::moduloSubtract(
  * 
  * @return a*b (mod p)
  */
-inline unsigned long long ShamirsSecretSharing::moduloMultiply(
+inline unsigned long long ShamirsSecretSharing::modMultiply(
 	unsigned long long a,
 	unsigned long long b
 ) {
@@ -251,8 +253,7 @@ inline unsigned long long ShamirsSecretSharing::moduloMultiply(
 
 
 /**
- * Computes a (mod p)
- *  Overloaded for unsigned long long or __uint128_t
+ * Computes a (mod p). Overloads for unsigned long long or __uint128_t.
  * 
  * @param a
  * 
