@@ -1,51 +1,18 @@
 #include <iostream>
-#include <random>
 #include <vector>
 
-#include "shamirs-secret-sharing.h"
-
-
-/**
- * Outputs a polynomial given k-1 coefficients and the secret, s.
- * 
- * @param secret The secret key, embedded in the constant term.
- * @param coefficients The list of k-1 coefficients, from a_{1} to a_{k-1}.
- * @param p The prime modulo.
- * 
- * @return Void
- */
-void outputPolynomial(
-	unsigned long long secret, 
-	const std::vector<unsigned long long> &coefficients, 
-	unsigned long long p
-) {
-	std::cout << "\nPOLYNOMIAL\n";
-
-	std::cout << "P(x) = ";
-	std::cout << secret << " + ";
-	unsigned long long xPow = 1;
-	for (unsigned long long i = 0; i < coefficients.size(); i++) {
-		std::cout << coefficients[i] << " x^" << xPow;
-		if (i < coefficients.size()-1) {
-			std::cout << " + ";
-		}
-		xPow += 1;
-	}
-	std::cout << " (mod " << p << ")\n";
-}
+#include "shamir.h"
 
 
 /**
  * The constructor.
  *  Given a secret and threshold, it immediately generates the degree k-1 
  *  polynomial: P(x) = secret + a_{1}x^{1} + ... + a_{k-1}x^{k-1}
- * 
- * @return Nothing, it's a constructor
  */
 ShamirsSecretSharing::ShamirsSecretSharing(
 	unsigned long long secret,
 	unsigned long long k
-) : secret(secret), k(k) {
+) : secret(secret), k(k), rng(std::random_device{}()) {
 
 	// n starts at 0 because the user will ask to generate shares later.
 	this->n = 0;
@@ -65,52 +32,6 @@ unsigned long long ShamirsSecretSharing::getK() const {
 
 
 /**
- * Generates k-1 random coefficients.
- * 
- * @return The list of coefficients a_{1}, a_{2}, ..., a_{k-1}
- */
-std::vector<unsigned long long> ShamirsSecretSharing::generateCoefficients() {
-	unsigned long long degree = this->k-1;
-	std::vector<unsigned long long> coefficients(degree, 0);
-	
-	for (unsigned long long i = 0; i < coefficients.size(); i++) {
-		coefficients[i] = getRandomIntegerInRange(0, ShamirsSecretSharing::p - 1);
-	}
-
-	outputPolynomial(this->secret, coefficients, ShamirsSecretSharing::p);
-
-	return coefficients;
-};
-
-
-/**
- * Uses the polynomial's coefficients to calculate the y value of the share.
- * 
- * @param x The x-value of the share.
- * 
- * @return The y-value of the share.
- */
-unsigned long long ShamirsSecretSharing::getShareYValue(
-	unsigned long long x
-) const {
-	// The secret is the constant term of the polynomial
-	__uint128_t yValue = this->secret;
-
-	__uint128_t curX = 1;
-	for (unsigned long long i = 0; i < this->coefficients.size(); i++) {
-		// Increase the x exponent by 1
-		curX = ShamirsSecretSharing::moduloMultiply(curX, x);
-
-		// Multiply by this coefficient
-		__uint128_t curTerm = ShamirsSecretSharing::moduloMultiply(this->coefficients[i], curX);
-		yValue = (yValue+curTerm) % ShamirsSecretSharing::p;
-	}
-
-	return static_cast<unsigned long long>(yValue);
-}
-
-
-/**
  * Generates n additional shares by selecting points which lie on the polynomial.
  *  x-values are [1, 2, ..., n]
  * New shares are added to the existing list of shares.
@@ -123,15 +44,13 @@ std::vector<std::pair<unsigned long long, unsigned long long>> ShamirsSecretShar
 	unsigned long long n
 ) {
 
-	this->shares.resize(this->n + n);
-
-	for (unsigned long long i = this->n; i < this->shares.size(); i++) {
-		unsigned long long x = i+1;
-		this->shares[i] = {x, getShareYValue(x)};
+	for (unsigned long long i = 0; i < n; i++) {
+		unsigned long long x = this->n + i+1;
+		shares.emplace_back(x, evaluatePolynomial(x));
 	}
 
-	this->n = this->n + n;
-	return this->shares;
+	this->n += n;
+	return shares;
 }
 
 
@@ -167,29 +86,73 @@ unsigned long long ShamirsSecretSharing::recoverSecret(
 		for (unsigned long long j = 0; j < userShares.size(); j++) {
 			if (j != i) {
 				// (x-x_{j}), but x=0 in this case since we want the constant term
-				unsigned long long factor = ShamirsSecretSharing::moduloSubtract(0, userShares[j].first);
-				numerator = ShamirsSecretSharing::moduloMultiply(numerator, factor);
+				unsigned long long factor = moduloSubtract(0, userShares[j].first);
+				numerator = moduloMultiply(numerator, factor);
 
 				// (x_{i}-x_{j})
 				unsigned long long divisor = moduloSubtract(userShares[i].first, userShares[j].first);
-				denominator = ShamirsSecretSharing::moduloMultiply(denominator, divisor);
+				denominator = moduloMultiply(denominator, divisor);
 			}
 		}
 
 		// To compute a/b (mod p), we must calculate a*b^{-1} (mod p)
-		__uint128_t fraction = ShamirsSecretSharing::moduloMultiply(
+		__uint128_t fraction = moduloMultiply(
 			numerator, 
-			ShamirsSecretSharing::getMultiplicativeInverse(denominator)
+			getMultiplicativeInverse(denominator)
 		);
 
 		// Multiply the term's fraction by the y-value of the current share, i
-		__uint128_t thisTerm = ShamirsSecretSharing::moduloMultiply(fraction, userShares[i].second);
+		__uint128_t thisTerm = moduloMultiply(fraction, userShares[i].second);
 
 		// Add this term to the secret
-		secret = (secret + thisTerm) % ShamirsSecretSharing::p;
+		secret = mod(secret + thisTerm);
 	}
 
 	return static_cast<unsigned long long>(secret);
+}
+
+
+/**
+ * Generates k-1 random coefficients.
+ * 
+ * @return The list of coefficients a_{1}, a_{2}, ..., a_{k-1}
+ */
+std::vector<unsigned long long> ShamirsSecretSharing::generateCoefficients() {
+	unsigned long long degree = k-1;
+	std::vector<unsigned long long> coefficients(degree, 0);
+	
+	for (unsigned long long i = 0; i < coefficients.size(); i++) {
+		coefficients[i] = getRandomIntegerInRange(0, p - 1);
+	}
+
+	return coefficients;
+}
+
+
+/**
+ * Uses the polynomial's coefficients to calculate the y-value given an x-value.
+ * 
+ * @param x The x-value.
+ * 
+ * @return The y-value.
+ */
+unsigned long long ShamirsSecretSharing::evaluatePolynomial(
+	unsigned long long x
+) const {
+	// The secret is the constant term of the polynomial
+	__uint128_t yValue = secret;
+
+	__uint128_t curX = 1;
+	for (unsigned long long i = 0; i < coefficients.size(); i++) {
+		// Increase the x exponent by 1
+		curX = moduloMultiply(curX, x);
+
+		// Multiply by this coefficient
+		__uint128_t curTerm = moduloMultiply(coefficients[i], curX);
+		yValue = mod(yValue+curTerm);
+	}
+
+	return static_cast<unsigned long long>(yValue);
 }
 
 
@@ -205,13 +168,8 @@ unsigned long long ShamirsSecretSharing::getRandomIntegerInRange(
 	unsigned long long min, 
 	unsigned long long max
 ) {
-	// 64-bit Mersenne Twister RNG
-	std::random_device rd;
-	std::mt19937_64 random_number_generator(rd());
-
 	std::uniform_int_distribution<unsigned long long> distribution(min, max);
-
-	return distribution(random_number_generator);
+	return distribution(rng);
 }
 
 
@@ -227,7 +185,7 @@ unsigned long long ShamirsSecretSharing::getRandomIntegerInRange(
 unsigned long long ShamirsSecretSharing::getMultiplicativeInverse(
 	unsigned long long a
 ) {
-	return ShamirsSecretSharing::moduloPower(a, ShamirsSecretSharing::p-2);
+	return moduloPower(a, p-2);
 }
 
 
@@ -249,9 +207,9 @@ unsigned long long ShamirsSecretSharing::moduloPower(
 
 	for (; exp > 0; exp >>= 1) {
 		if (exp & 1) {
-			res = (res * b) % ShamirsSecretSharing::p;
+			res = mod(res * b);
 		}
-		b = (b * b) % ShamirsSecretSharing::p;
+		b = mod(b * b);
 	}
 
 	return static_cast<unsigned long long>(res);
@@ -272,9 +230,7 @@ inline unsigned long long ShamirsSecretSharing::moduloSubtract(
 	unsigned long long a,
 	unsigned long long b
 ) {
-	return (a >= b) ? 
-		(a - b) % ShamirsSecretSharing::p : 
-		(ShamirsSecretSharing::p - (b - a) % ShamirsSecretSharing::p) % ShamirsSecretSharing::p;
+	return mod(a + p - b);
 }
 
 
@@ -290,5 +246,26 @@ inline unsigned long long ShamirsSecretSharing::moduloMultiply(
 	unsigned long long a,
 	unsigned long long b
 ) {
-	return static_cast<unsigned long long>((__uint128_t(a) * b) % ShamirsSecretSharing::p);
+	return static_cast<unsigned long long>(mod(__uint128_t(a) * b));
+}
+
+
+/**
+ * Computes a (mod p)
+ *  Overloaded for unsigned long long or __uint128_t
+ * 
+ * @param a
+ * 
+ * @return a (mod p)
+ */
+inline unsigned long long ShamirsSecretSharing::mod(
+	unsigned long long a
+) {
+	return a % p;
+}
+
+inline unsigned long long ShamirsSecretSharing::mod(
+	__uint128_t a
+) {
+	return static_cast<unsigned long long>(a % p);
 }

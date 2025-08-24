@@ -1,7 +1,8 @@
 #include <iostream>
+#include <limits>
 #include <unordered_set>
 
-#include "shamirs-secret-sharing.h"
+#include "shamir.h"
 
 
 /**
@@ -11,12 +12,15 @@
  * 
  * @return The user's ULL input.
  */
-unsigned long long getULLInput(std::string prompt) {
+unsigned long long readUInt64(const std::string &prompt) {
 	unsigned long long input;
 
 	bool valid = false;
 	while (!valid) {
-		std::cout << prompt;
+		if (prompt != "") {
+			std::cout << prompt;
+		}
+		
 		std::cin >> input;
 
 		if (std::cin.fail()) {
@@ -36,7 +40,7 @@ unsigned long long getULLInput(std::string prompt) {
 
 
 /**
- * Prompts the user for a secret and threshold k to initialise the SSS object.
+ * Prompts the user for a secret and threshold k to initialise the SSS instance.
  * 
  * @param secret The secret to hide in the constant term of the polynomial.
  * @param k The number of shares required to recover the secret. Leads to a 
@@ -45,11 +49,11 @@ unsigned long long getULLInput(std::string prompt) {
  * @return The ShamirsSecretSharing instance.
  */
 ShamirsSecretSharing hideSecret() {	
-	unsigned long long secret = getULLInput("Enter the secret (S): ");
-	unsigned long long k = getULLInput("Enter the number of shares which need to be combined to recover the secret (k): ");
+	unsigned long long secret = readUInt64("Enter the secret (S): ");
+	unsigned long long k = readUInt64("Enter the number of shares which need to be combined to recover the secret (k): ");
 
-	ShamirsSecretSharing sss(secret, k);
-	return sss;
+	ShamirsSecretSharing sssInstance(secret, k);
+	return sssInstance;
 }
 
 
@@ -57,15 +61,15 @@ ShamirsSecretSharing hideSecret() {
  * Prompts the user for a number of shares to be generated, and then outputs 
  * the full list of shares.
  * 
- * @param sss The ShamirsSecretSharing instance to generate the shares.
+ * @param sssInstance The ShamirsSecretSharing instance to generate the shares.
  * 
  * @return Void
  */
-void generateShares(ShamirsSecretSharing &sss) {
+void generateShares(ShamirsSecretSharing &sssInstance) {
 	std::cout << "\nCREATE SHARES\n";
-	unsigned long long n = getULLInput("Enter the number of shares to generate (n): ");
+	unsigned long long n = readUInt64("Enter the number of shares to generate (n): ");
 
-	std::vector<std::pair<unsigned long long, unsigned long long>> shares = sss.generateShares(n);
+	std::vector<std::pair<unsigned long long, unsigned long long>> shares = sssInstance.generateShares(n);
 
 	std::cout << "\nALL SHARES\n";
 	for (unsigned long long i = 0; i < shares.size(); i++) {
@@ -87,12 +91,11 @@ void recoverSecret(unsigned long long k) {
 
 	std::vector<std::pair<unsigned long long, unsigned long long>> shares(k);
 	for (unsigned long long i = 1; i <= k; i++) {
-		unsigned long long x, y;
-		std::cout << "Enter share #" << i << " of " << k << " in the format x y: ";
-		std::cin >> x >> y;
+		std::cout << "Enter share #" << i << "/" << k << " in the format x y: ";
+		unsigned long long x = readUInt64("");
+		unsigned long long y = readUInt64("");
 
-		std::pair<unsigned long long, unsigned long long> point = {x, y};
-		shares[i-1] = point;
+		shares[i-1] = {x, y};
 	}
 
 	unsigned long long secret = ShamirsSecretSharing::recoverSecret(shares);
@@ -102,11 +105,10 @@ void recoverSecret(unsigned long long k) {
 
 int main() {
 	std::cout << "\nSHAMIR'S SECRET SHARING\n";
-	ShamirsSecretSharing sss = hideSecret();
+	ShamirsSecretSharing sssInstance = hideSecret();
 
+	std::unordered_set<std::string> validChoices = {"1", "2", "q"};
 	while (true) {
-		std::unordered_set<std::string> validChoices = {"1", "2", "q"};
-
 		std::cout << "\nMAIN MENU\n";
 		std::cout << "[1] Generate shares\n";
 		std::cout << "[2] Recover secret\n";
@@ -119,9 +121,9 @@ int main() {
 		}
 
 		if (choice == "1") {
-			generateShares(sss);
+			generateShares(sssInstance);
 		} else if (choice == "2") {
-			recoverSecret(sss.getK());			
+			recoverSecret(sssInstance.getK());			
 		} else if (choice == "q") {
 			std::cout << "\nGoodbye :)\n";
 			break;

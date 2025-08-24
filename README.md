@@ -14,9 +14,17 @@ Shamir's Secret Sharing provides a way to divide a secret into n parts (one for 
 This is my implementation of Shamir's Secret Sharing that I did for personal learning, so I cannot guarantee it's perfectly secure. If you want to use this code, please have it reviewed by a security professional first :)
 
 ## Running the Code
+To interact with the API to hide a secret, generate shares and recover the secret, run the main application:
 ```
-g++ ShamirsSecretSharing.cpp sss-main.cpp -Wall -Werror -fsanitize=address -o shamirs-secret-sharing
+g++ ShamirsSecretSharing.cpp shamir-main.cpp -Wall -Werror -fsanitize=address -o shamir-main
 ```
 ```
-./shamirs-secret-sharing
+./shamir-main
+```
+To run the tests and examples:
+```
+g++ ShamirsSecretSharing.cpp shamir-test.cpp -Wall -Werror -fsanitize=address -o shamir-test
+```
+```
+./shamir-test
 ```
