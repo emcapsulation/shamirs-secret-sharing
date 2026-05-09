@@ -1,7 +1,6 @@
-#include <iostream>
-#include <vector>
-
 #include "shamir.h"
+
+#include <stdexcept>
 
 
 /**
@@ -9,38 +8,31 @@
  *  Given a secret and threshold, it immediately generates the degree k-1 
  *  polynomial: P(x) = secret + a_{1}x^{1} + ... + a_{k-1}x^{k-1}
  */
-ShamirsSecretSharing::ShamirsSecretSharing(
-	unsigned long long secret,
-	unsigned long long k
-) : secret(secret), k(k), rng(std::random_device{}()) {
-
-	if (secret >= p) {
-		throw std::domain_error("Error: The secret is larger than the field size.");
-	}
-
-	if (k >= p) {
-		throw std::domain_error("Error: The threshold (k) is larger than the field size.");
-	} else if (k <= 1) {
-		throw std::domain_error("Error: The threshold (k) must be at least 2.");
-	}
-
-	// n starts at 0 because the user will ask to generate shares later.
-	this->n = 0;
+ShamirsSecretSharing::ShamirsSecretSharing(uint64_t secret, uint64_t threshold) 
+: secret(secret), threshold(threshold), rng(std::random_device{}()) 
+{
+	if (secret > p-1)
+		throw std::domain_error("Error: The secret is too large.");
+	if (threshold < 2 || threshold > p-1)
+		throw std::domain_error("Error: The threshold (k) is outside the range.");
 
 	// Immediately hide the secret in the degree k-1 polynomial.
 	this->coefficients = generateCoefficients();
 }
 
 
-unsigned long long ShamirsSecretSharing::getN() const {
-	return this->n;
+uint64_t ShamirsSecretSharing::getNumShares() const 
+{
+	return this->shares.size();
 }
 
-unsigned long long ShamirsSecretSharing::getK() const {
-	return this->k;
+uint64_t ShamirsSecretSharing::getThreshold() const 
+{
+	return this->threshold;
 }
 
-std::vector<std::pair<unsigned long long, unsigned long long>> ShamirsSecretSharing::getShares() const {
+const std::vector<Share>& ShamirsSecretSharing::getShares() const 
+{
 	return this->shares;
 }
 
@@ -50,24 +42,22 @@ std::vector<std::pair<unsigned long long, unsigned long long>> ShamirsSecretShar
  *  x-values are [1, 2, ..., n]
  * New shares are added to the existing list of shares.
  * 
- * @param n The number of new shares to create.
+ * @param numToGenerate The number of new shares to create.
  * 
  * @return The list of all shares.
  */
-std::vector<std::pair<unsigned long long, unsigned long long>> ShamirsSecretSharing::generateShares(
-	unsigned long long n
-) {
-	if (this->n + n >= p) {
-		throw std::domain_error("Error: The number of shares requested is outside the field size.");
-	}
+void ShamirsSecretSharing::generateAdditionalShares(uint64_t numToGenerate) 
+{
+	size_t prevSize = this->shares.size();
+	if (numToGenerate > p-1-prevSize)
+		throw std::domain_error("Error: The number of shares requested is outside the range.");
 
-	for (unsigned long long i = 0; i < n; i++) {
-		unsigned long long x = this->n + i+1;
-		shares.emplace_back(x, evaluatePolynomial(x));
+	this->shares.reserve(prevSize + numToGenerate);
+	for (uint64_t i = 0; i < numToGenerate; i++) 
+	{
+		uint64_t x = prevSize + i + 1;
+		this->shares.emplace_back(x, evaluatePolynomial(x));
 	}
-
-	this->n += n;
-	return shares;
 }
 
 
@@ -88,47 +78,46 @@ std::vector<std::pair<unsigned long long, unsigned long long>> ShamirsSecretShar
  * 
  * @return The secret based on the Lagrange Interpolation Formula at P(0).
  */
-unsigned long long ShamirsSecretSharing::recoverSecret(
-	const std::vector<std::pair<unsigned long long, unsigned long long>> &userShares
-) {
-	unsigned long long secret = 0;
+uint64_t ShamirsSecretSharing::recoverSecret(const std::vector<Share> &userShares) 
+{
+	uint64_t secret = 0;
 
-	for (unsigned long long i = 0; i < userShares.size(); i++) {
-		if (userShares[i].first >= p || userShares[i].second >= p) {
+	for (const auto &[xi, yi] : userShares) 
+	{
+		if (xi < 1 || xi > p-1 || yi > p-1)
 			throw std::domain_error("Error: A provided share is outside the field range.");
-		}
 
 		// Numerator = (x-x_{1})...(x-x_{i-1})(x-x_{i+1})...(x-x_{k})
-		unsigned long long numerator = 1;
+		uint64_t numerator = 1;
 
 		// Denominator = (x_{i}-x_{1})...(x_{i}-x_{i-1})(x_{i}-x_{i+1})...(x_{i}-x_{k})
-		unsigned long long denominator = 1;
+		uint64_t denominator = 1;
 
-		for (unsigned long long j = 0; j < userShares.size(); j++) {
-			if (j != i) {
-				// (x-x_{j}), but x=0 in this case since we want the constant term
-				unsigned long long factor = modSubtract(0, userShares[j].first);
-				numerator = modMultiply(numerator, factor);
-
-				// (x_{i}-x_{j})
-				unsigned long long divisor = modSubtract(userShares[i].first, userShares[j].first);
-				denominator = modMultiply(denominator, divisor);
+		int equalXCount = 0;
+		for (const auto &[xj, yj] : userShares) 
+		{
+			if (xi == xj)
+			{
+				if (equalXCount > 0)
+					throw std::invalid_argument("Error: Two or more of the provided shares had the same x-value.");
+				equalXCount++;
+				continue;
 			}
-		}
 
-		// This can only happen if two shares have the same x-value
-		if (denominator == 0) {
-			throw std::invalid_argument("Error: Two or more of the provided shares had the same x-value.");
+			// (x-x_{j}), but x=0 in this case since we want the constant term
+			uint64_t factor = modSubtract(0, xj);
+			numerator = modMultiply(numerator, factor);
+
+			// (x_{i}-x_{j})
+			uint64_t divisor = modSubtract(xi, xj);
+			denominator = modMultiply(denominator, divisor);
 		}
 
 		// To compute a/b (mod p), we must calculate a*b^{-1} (mod p)
-		unsigned long long fraction = modMultiply(
-			numerator, 
-			getMultiplicativeInverse(denominator)
-		);
+		uint64_t fraction = modMultiply(numerator, getMultiplicativeInverse(denominator));
 
 		// Multiply the term's fraction by the y-value of the current share, i
-		unsigned long long thisTerm = modMultiply(fraction, userShares[i].second);
+		uint64_t thisTerm = modMultiply(fraction, yi);
 
 		// Add this term to the secret
 		secret = mod(secret + thisTerm);
@@ -143,13 +132,14 @@ unsigned long long ShamirsSecretSharing::recoverSecret(
  * 
  * @return The list of coefficients a_{1}, a_{2}, ..., a_{k-1}
  */
-std::vector<unsigned long long> ShamirsSecretSharing::generateCoefficients() {
-	unsigned long long degree = k-1;
-	std::vector<unsigned long long> coefficients(degree, 0);
+std::vector<uint64_t> ShamirsSecretSharing::generateCoefficients() 
+{
+	uint64_t degree = threshold-1;
+	std::vector<uint64_t> coefficients(degree, 0);
 	
-	for (unsigned long long i = 0; i < coefficients.size(); i++) {
-		coefficients[i] = getRandomIntegerInRange(0, p - 1);
-	}
+	for (size_t i = 0; i < degree-1; i++)
+		coefficients[i] = getRandomIntegerInRange(0, p-1);
+	coefficients[degree-1] = getRandomIntegerInRange(1, p-1);
 
 	return coefficients;
 }
@@ -162,19 +152,19 @@ std::vector<unsigned long long> ShamirsSecretSharing::generateCoefficients() {
  * 
  * @return The y-value.
  */
-unsigned long long ShamirsSecretSharing::evaluatePolynomial(
-	unsigned long long x
-) const {
+uint64_t ShamirsSecretSharing::evaluatePolynomial(uint64_t x) const 
+{
 	// The secret is the constant term of the polynomial
-	unsigned long long yValue = secret;
+	uint64_t yValue = secret;
 
-	unsigned long long curX = 1;
-	for (unsigned long long i = 0; i < coefficients.size(); i++) {
+	uint64_t curX = 1;
+	for (size_t i = 0; i < coefficients.size(); i++) 
+	{
 		// Increase the x exponent by 1
 		curX = modMultiply(curX, x);
 
 		// Multiply by this coefficient
-		unsigned long long curTerm = modMultiply(coefficients[i], curX);
+		uint64_t curTerm = modMultiply(coefficients[i], curX);
 		yValue = mod(yValue+curTerm);
 	}
 
@@ -190,11 +180,9 @@ unsigned long long ShamirsSecretSharing::evaluatePolynomial(
  * 
  * @return The random integer.
  */
-unsigned long long ShamirsSecretSharing::getRandomIntegerInRange(
-	unsigned long long min, 
-	unsigned long long max
-) {
-	std::uniform_int_distribution<unsigned long long> distribution(min, max);
+uint64_t ShamirsSecretSharing::getRandomIntegerInRange(uint64_t min, uint64_t max) 
+{
+	std::uniform_int_distribution<uint64_t> distribution(min, max);
 	return distribution(rng);
 }
 
@@ -208,12 +196,10 @@ unsigned long long ShamirsSecretSharing::getRandomIntegerInRange(
  * 
  * @return The multiplicative inverse, a^{-1} (mod p).
  */
-unsigned long long ShamirsSecretSharing::getMultiplicativeInverse(
-	unsigned long long a
-) {
-	if (a == 0) {
+uint64_t ShamirsSecretSharing::getMultiplicativeInverse(uint64_t a) 
+{
+	if (a == 0)
 		throw std::invalid_argument("Error: 0 has no multiplicative inverse.");
-	}
 
 	return modPower(a, p-2);
 }
@@ -229,16 +215,14 @@ unsigned long long ShamirsSecretSharing::getMultiplicativeInverse(
  * 
  * @return base^exp (mod p)
  */
-unsigned long long ShamirsSecretSharing::modPower(
-	unsigned long long base,
-	unsigned long long exp
-) {
-	unsigned long long res = 1, b = base;
+uint64_t ShamirsSecretSharing::modPower(uint64_t base, uint64_t exp) 
+{
+	uint64_t res = 1, b = base;
 
-	for (; exp > 0; exp >>= 1) {
-		if (exp & 1) {
+	for (; exp > 0; exp >>= 1) 
+	{
+		if (exp & 1)
 			res = modMultiply(res, b);
-		}
 		b = modMultiply(b, b);
 	}
 
@@ -254,10 +238,8 @@ unsigned long long ShamirsSecretSharing::modPower(
  * 
  * @return a-b (mod p)
  */
-inline unsigned long long ShamirsSecretSharing::modSubtract(
-	unsigned long long a,
-	unsigned long long b
-) {
+uint64_t ShamirsSecretSharing::modSubtract(uint64_t a, uint64_t b) 
+{
 	return mod(a + p - b);
 }
 
@@ -270,29 +252,25 @@ inline unsigned long long ShamirsSecretSharing::modSubtract(
  * 
  * @return a*b (mod p)
  */
-inline unsigned long long ShamirsSecretSharing::modMultiply(
-	unsigned long long a,
-	unsigned long long b
-) {
-	return static_cast<unsigned long long>(mod(__uint128_t(a) * b));
+uint64_t ShamirsSecretSharing::modMultiply(uint64_t a, uint64_t b) 
+{
+	return static_cast<uint64_t>(mod(__uint128_t(a) * b));
 }
 
 
 /**
- * Computes a (mod p). Overloads for unsigned long long or __uint128_t.
+ * Computes a (mod p). Overloads for uint64_t or __uint128_t.
  * 
  * @param a
  * 
  * @return a (mod p)
  */
-inline unsigned long long ShamirsSecretSharing::mod(
-	unsigned long long a
-) {
+uint64_t ShamirsSecretSharing::mod(uint64_t a) 
+{
 	return a % p;
 }
 
-inline unsigned long long ShamirsSecretSharing::mod(
-	__uint128_t a
-) {
-	return static_cast<unsigned long long>(a % p);
+uint64_t ShamirsSecretSharing::mod(__uint128_t a) 
+{
+	return static_cast<uint64_t>(a % p);
 }

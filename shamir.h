@@ -1,50 +1,48 @@
-#include <random>
-#include <vector>
-
 #ifndef SHAMIRS_SECRET_SHARING_H
 #define SHAMIRS_SECRET_SHARING_H
 
+#include <cstdint>
+#include <random>
+#include <utility>
+#include <vector>
+
+using Share = std::pair<uint64_t, uint64_t>;
+
 class ShamirsSecretSharing {
 public:
-	ShamirsSecretSharing(
-		unsigned long long secret, 
-		unsigned long long k
-	);	
+	ShamirsSecretSharing(uint64_t secret, uint64_t threshold);	
 
-	unsigned long long getN() const;
-	unsigned long long getK() const;
-	std::vector<std::pair<unsigned long long, unsigned long long>> getShares() const;
-	std::vector<std::pair<unsigned long long, unsigned long long>> generateShares(
-		unsigned long long
-	);
-	static unsigned long long recoverSecret(
-		const std::vector<std::pair<unsigned long long, unsigned long long>> &userShares
-	);
+	uint64_t getNumShares() const;
+	uint64_t getThreshold() const;
+	void generateAdditionalShares(uint64_t numToGenerate);
+	const std::vector<Share>& getShares() const;
+
+	// Static because combining the shares is independent of state
+	static uint64_t recoverSecret(const std::vector<Share> &userShares);
 
 private:
-	unsigned long long secret;
-	unsigned long long n;
-	unsigned long long k;
+	uint64_t secret;
+	uint64_t threshold;
 
 	// 64-bit Mersenne Twister RNG
 	std::mt19937_64 rng;
 
-	std::vector<unsigned long long> coefficients;
-	std::vector<std::pair<unsigned long long, unsigned long long>> shares;
+	std::vector<uint64_t> coefficients;
+	std::vector<Share> shares;
 
 	// The 8th Mersenne Prime, 2^61 - 1
 	// Mersenne Primes are used in cryptography because they lead to fast mod operations
-	static constexpr unsigned long long p = (1ULL << 61) - 1;
+	static constexpr uint64_t p = (1ULL << 61) - 1;
 
-	std::vector<unsigned long long> generateCoefficients();
-	unsigned long long evaluatePolynomial(unsigned long long) const;
-	unsigned long long getRandomIntegerInRange(unsigned long long, unsigned long long);
-	static unsigned long long getMultiplicativeInverse(unsigned long long);
-	static unsigned long long modPower(unsigned long long, unsigned long long);
-	static inline unsigned long long modSubtract(unsigned long long, unsigned long long);
-	static inline unsigned long long modMultiply(unsigned long long, unsigned long long);
-	static inline unsigned long long mod(unsigned long long);
-	static inline unsigned long long mod(__uint128_t);
+	std::vector<uint64_t> generateCoefficients();
+	uint64_t evaluatePolynomial(uint64_t x) const;
+	uint64_t getRandomIntegerInRange(uint64_t min, uint64_t max);
+	static uint64_t getMultiplicativeInverse(uint64_t a);
+	static uint64_t modPower(uint64_t base, uint64_t exp);
+	static uint64_t modSubtract(uint64_t a, uint64_t b);
+	static uint64_t modMultiply(uint64_t a, uint64_t b);
+	static uint64_t mod(uint64_t a);
+	static uint64_t mod(__uint128_t a);
 };
 
 #endif
