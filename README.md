@@ -18,14 +18,14 @@ All of the Shamir's Secret Sharing functionality is in ShamirsSecretSharing.cpp.
 
 For an interactive experience where you can hide a secret, generate shares and recover the secret, run the main application:
 ```
-g++ ShamirsSecretSharing.cpp shamir-main.cpp -Wall -Werror -fsanitize=address -o shamir-main
+g++ ShamirsSecretSharing.cpp shamir-main.cpp -Wall -Werror -fsanitize=address -std=c++17 -o shamir-main
 ```
 ```
 ./shamir-main
 ```
 To run the tests and examples:
 ```
-g++ ShamirsSecretSharing.cpp shamir-test.cpp -Wall -Werror -fsanitize=address -o shamir-test
+g++ ShamirsSecretSharing.cpp shamir-test.cpp -Wall -Werror -fsanitize=address -std=c++17 -o shamir-test
 ```
 ```
 ./shamir-test
